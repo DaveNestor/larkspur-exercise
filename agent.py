@@ -9,6 +9,8 @@ Where you edit:   grep -n '✏' agent.py   (six marks, one per place)
 Steps and gates:  https://anthropicpartnerbasecamp.bts.com/
 """
 from __future__ import annotations
+import json
+import os
 from typing import Any, Dict, List
 from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
                      new_session, next_available_day, record_tool_result,
@@ -17,8 +19,48 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "fare_rules",
+        "description": (
+            "Use when a customer asks why a policy decision or fare rule applies to them, "
+            "for example why they were not offered a hotel or why their fare cannot be "
+            "refunded. check_policy gives the decision, not the explanation in words; "
+            "this tool returns the explanation in words from Larkspur's Handbook. Call "
+            "it after check_policy, using the policy_row_id from the check_policy result."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "policy_row_id": {
+                    "type": "string",
+                    "description": "The policy_row_id from the check_policy result, e.g. UNC-CXL",
+                },
+            },
+            "required": ["policy_row_id"],
+        },
+    }
+]
+def fare_rules(policy_row_id: str) -> Dict[str, Any]:
+    """Explain a check_policy decision in the Handbook's own words."""
+    data = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "americas")
+    with open(os.path.join(data, "disruption_policy.json")) as fh:
+        rows = {r["policy_row_id"]: r for r in json.load(fh)["rows"]}
+    row = rows.get(policy_row_id)
+    if row is None:
+        return {"error": "unknown policy_row_id %r; call check_policy first and pass "
+                         "its policy_row_id" % policy_row_id, "known_ids": sorted(rows)}
+    with open(os.path.join(data, "fare_rules_excerpt.md")) as fh:
+        text = fh.read()
+    # No ids in the Handbook. Sections 5 and 6 hold the disruption and care rules;
+    # the row's cause_class says which column of the section 6 table applies.
+    handbook = text[text.index("### 5."):text.index("### 7.")]
+    column = "Within our control" if row["cause_class"] == "controllable" else "Outside our control"
+    return {"policy_row_id": policy_row_id, "applies_column": column,
+            "explainer": row.get("explainer_en", ""), "handbook_text": handbook}
+
+
+LOCAL_TOOLS: Dict[str, Any] = {"fare_rules": fare_rules}   # ✏️ Build 2, step 2.1: the functions behind them
 
 
 def text_of(response) -> str:
