@@ -16,7 +16,11 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
-TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
+TONE_ADDENDUM = ("Remain calm and professional with frustrated customers. "
+                    "If a customer threatens legal action or becomes abusive, "
+                    "immediately call escalate_to_human. "
+                    "After escalation, stop routine booking actions and "
+                    "explain that a human agent will handle the case.")    #  Build 4, step 4.1, intelligence goal
 EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
 LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
 
@@ -206,10 +210,10 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
         {
             "name": "escalate_to_human",
             "description": (
-                "Hand this conversation to a human, with your reasoning attached. Use for "
-                "groups, partner segments, unaccompanied minors, refunds, or anything else "
-                "out of scope. This is the correct outcome for those cases, not a failure."
-            ),
+                "Escalate a customer case to a human agent when the customer "
+                "threatens legal action, mentions lawyers, becomes abusive, "
+                "or requests human assistance. Use this instead of handling "
+                "the issue as a routine disruption."),
             "input_schema": {
                 "type": "object",
                 "properties": {
